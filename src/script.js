@@ -220,7 +220,7 @@ function hideOverlay(){
 }
 
 // Keyboard movement and camera modes (no astronaut model)
-let keys = { forward:false, back:false, left:false, right:false, up:false, down:false };
+let keys = { forward:false, back:false, left:false, right:false, up:false, down:false, sprint:false };
 let moveSpeed = 0.6;
 let lastSpokenPlanet = null;
 let isFirstPerson = true;
@@ -232,8 +232,11 @@ window.addEventListener('keydown', function(e){
   if (k === 'a' || e.key === 'arrowleft') keys.left = true;
   if (k === 'd' || e.key === 'arrowright') keys.right = true;
   if (k === ' ') keys.up = true; // space
-  if (k === 'shift') keys.down = true;
-  if (k === 'c') { isFirstPerson = !isFirstPerson; }
+  // use Control/Ctrl for descend (previously Shift used)
+  if (k === 'control' || k === 'ctrl') keys.down = true;
+  // use Shift as sprint (hold to go faster)
+  if (k === 'shift') keys.sprint = true;
+  // (removed spaceship pointer-lock toggle 'C')
 });
 window.addEventListener('keyup', function(e){
   const k = e.key.toLowerCase();
@@ -242,8 +245,11 @@ window.addEventListener('keyup', function(e){
   if (k === 'a' || e.key === 'arrowleft') keys.left = false;
   if (k === 'd' || e.key === 'arrowright') keys.right = false;
   if (k === ' ') keys.up = false;
-  if (k === 'shift') keys.down = false;
+  if (k === 'control' || k === 'ctrl') keys.down = false;
+  if (k === 'shift') keys.sprint = false;
 });
+
+// pointer-lock / spaceship mode removed; no pointerlock handlers remain
 
 // Speak planet descriptions using the browser SpeechSynthesis API (English by default)
 function speakPlanetInfo(planetName){
@@ -1109,7 +1115,7 @@ asteroids.forEach(asteroid => {
   window.__lastFrameTime = now;
 
   if (isFirstPerson) {
-    // move relative to camera forward to feel intuitive
+    // regular first-person (no pointer-lock mouse-look)
     const camDir = new THREE.Vector3();
     camera.getWorldDirection(camDir);
     camDir.y = 0;
@@ -1125,16 +1131,21 @@ asteroids.forEach(asteroid => {
     if (keys.up) moveVec.y += 1;
     if (keys.down) moveVec.y -= 1;
     if (movementEnabled && moveVec.lengthSq() > 0){
-      moveVec.normalize().multiplyScalar(moveSpeed * (dt * 60));
+      // apply sprint multiplier when holding Shift
+      let speed = moveSpeed;
+      if (keys.sprint) speed *= 2.0;
+      moveVec.normalize().multiplyScalar(speed * (dt * 60));
       camera.position.add(moveVec);
     }
-    // proximity check for TTS
     if (movementEnabled) checkCameraProximity();
   } else {
     // Top-down / God view: smoothly move camera to an overhead position
-    const desiredPos = new THREE.Vector3(0, 400, 0.1);
+    // Keep the camera above the current XZ location instead of forcing center on the Sun
+    const desiredPos = new THREE.Vector3(camera.position.x, 400, camera.position.z);
     camera.position.lerp(desiredPos, 0.05);
-    camera.lookAt(new THREE.Vector3(0,0,0));
+    // look down at the scene under the camera (don't force origin), so user can view nearby planets
+    const lookTarget = new THREE.Vector3(camera.position.x, 0, camera.position.z);
+    camera.lookAt(lookTarget);
   }
 }
 
